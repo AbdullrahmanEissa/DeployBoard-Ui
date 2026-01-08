@@ -1,28 +1,19 @@
+version: '3.8'
 services:
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: backend_prod
-    restart: always
-    expose:
+    build: ../backend
+    ports:
       - "5000"
     networks:
-      - app-network
-
+      - deployboard-network
+  
   frontend:
-    build:
-      context: ../frontend/deployboard-ui
-      dockerfile: Dockerfile
-    container_name: frontend_prod
-    restart: always
+    build: ../frontend/deployboard-ui
     ports:
       - "80:80"
-    depends_on:
-      - backend
     networks:
-      - app-network
+      - deployboard-network
 
 networks:
-  app-network:
+  deployboard-network:
     driver: bridge

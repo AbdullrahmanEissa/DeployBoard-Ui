@@ -1,15 +1,12 @@
-FROM node:20-alpine
-WORKDIR /usr/src/app
-COPY package*.json ./
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package.json .
 RUN npm install
 COPY . .
 RUN npx ng build
 
-
-FROM nginx:alpine
-COPY --from=0 /usr/src/app/dist/deployboard-ui/browser /usr/share/nginx/html
+FROM nginx:stable-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+COPY --from=build /app/dist/deployboard-ui/browser /usr/share/nginx/html
 CMD ["nginx", "-g", "daemon off;"]
-
