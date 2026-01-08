@@ -1,16 +1,18 @@
 # 🚀 DeployBoard
 
-**DeployBoard** is a simple, production-style **full-stack deployment demo**.
+**DeployBoard** is a **production-minded full-stack deployment demo**.
 
-This project is **not about features or UI**.
-It exists to demonstrate **real-world deployment thinking**:
+This repository is **not about UI features** or application complexity.
+It exists to demonstrate **how real systems are deployed, automated, and scaled** in practice.
 
-* How frontend and backend are separated
-* How production builds work
-* How services communicate securely
-* How Docker and Nginx are used correctly
+The focus is on:
 
-It is intentionally **easy to understand**, even for non-technical readers.
+* Deployment architecture
+* Infrastructure automation
+* Clean separation of responsibilities
+* Production-style workflows (without overengineering)
+
+This project is intentionally **easy to understand**, even for non-technical reviewers.
 
 ---
 
@@ -20,30 +22,43 @@ It is intentionally **easy to understand**, even for non-technical readers.
 * Frontend build vs runtime separation
 * Backend running behind a reverse proxy
 * Clean Docker & Docker Compose setup
+* Infrastructure as Code using Terraform
+* Configuration management using Ansible
+* Horizontal scaling behind a Load Balancer
 * No hard-coded environments
-* No over-engineering
+* No Kubernetes, no buzzword inflation
 
-This is the kind of setup used in **real companies**, just simplified.
+This mirrors **real company setups**, simplified for clarity.
 
 ---
 
-## 🧱 Architecture Overview (Simple)
+## 🧱 Architecture Overview (High Level)
 
 ```
-Browser
-   ↓
-Nginx (Frontend Container)
-   ├── /        → Angular SPA (static files)
-   └── /api     → Backend API (Flask)
-                    ↓
-               Python Backend (internal only)
+User Browser
+     |
+     v
+AWS Application Load Balancer
+     |
+     v
+EC2 Instances (x5)
+     |
+     v
+Nginx (Reverse Proxy)
+     ├── /        → Frontend (Angular SPA – static files)
+     └── /api     → Backend API (Flask)
+                      |
+                      v
+                 Python Backend (internal only)
 ```
 
-### Key Ideas
+### Key Architecture Principles
 
-* Users **only talk to Nginx**
-* Backend is **never exposed publicly**
-* Frontend and backend are **independent services**
+* Users never talk directly to the backend
+* Backend is never exposed publicly
+* Nginx is the single entry point
+* Frontend and backend are independent services
+* Traffic is distributed across multiple EC2 instances
 
 ---
 
@@ -53,19 +68,27 @@ Nginx (Frontend Container)
 
 * Angular
 * Built once, served as static files
-* Served using **Nginx**
+* Served using Nginx (no dev server)
 
 ### Backend
 
 * Python (Flask)
-* Runs using **Gunicorn** (production server)
+* Gunicorn (production WSGI server)
 * Internal service only
 
-### Infrastructure
+### Containerization
 
 * Docker
-* Docker Compose
+* Docker Compose (v2)
 * Internal Docker networking
+
+### Infrastructure & Automation
+
+* **Terraform** – infrastructure provisioning
+* **Ansible** – server configuration & deployment
+* **AWS EC2** – compute
+* **AWS Application Load Balancer** – traffic distribution
+* **Nginx** – reverse proxy
 
 ---
 
@@ -84,97 +107,155 @@ DeployBoard/
 │       ├── nginx.conf
 │       └── Angular source code
 │
-└── docker-compose/
-    └── docker-compose-prod.yml
+├── docker-compose/
+│   └── docker-compose-prod.yml
+│
+├── terraform/
+│   └── AWS infrastructure (EC2, ALB, SGs)
+│
+└── ansible/
+    ├── inventory.ini
+    ├── ansible.cfg
+    └── deploy.yml
 ```
 
-Each part has **one responsibility only**.
+Each directory has **one clear responsibility**.
 
 ---
 
-## ▶️ How to Run the Project (Step-by-Step)
+## 🏗 Terraform – Infrastructure Provisioning
 
-### Requirements
+Terraform is used to provision **all AWS infrastructure** in a repeatable way.
 
-* Docker
-* Docker Compose
+### What Terraform Creates
 
-No other setup is needed.
+* 5 × EC2 instances (Ubuntu 22.04)
+* Application Load Balancer (ALB)
+* Target group with all EC2 instances registered
+* Security groups for SSH and application traffic
+* Consistent tagging and naming:
+
+  ```
+  server.1
+  server.2
+  server.3
+  server.4
+  server.5
+  ```
+
+### Terraform Responsibilities
+
+* Infrastructure only
+* No application logic
+* No configuration steps
+
+This separation keeps infrastructure **immutable and reproducible**.
 
 ---
 
-### Step 1: Go to the docker-compose folder
+## ⚙️ Ansible – Configuration & Deployment
+
+Ansible is used **after Terraform** to configure the EC2 instances and deploy the application.
+
+### What Ansible Does
+
+On each EC2 instance:
+
+1. Updates system packages
+2. Installs Docker (if missing)
+3. Installs Docker Compose v2 plugin
+4. Ensures Docker service is running
+5. Clones the application repository
+6. Builds Docker images
+7. Runs the application using Docker Compose
+
+All tasks are **idempotent** and safe to re-run.
+
+---
+
+### Ansible Inventory (Example)
+
+```ini
+[deployboard]
+server1 ansible_host=<ip>
+server2 ansible_host=<ip>
+server3 ansible_host=<ip>
+server4 ansible_host=<ip>
+server5 ansible_host=<ip>
+
+[deployboard:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/project-key.pem
+```
+
+---
+
+### Deployment Playbook
+
+The main playbook (`deploy.yml`) performs a full deployment:
+
+* Docker installation
+* Docker Compose setup
+* Repository cloning
+* Image build
+* Container startup
+
+Docker Compose files live in:
+
+```
+/opt/deployboard/docker-compose/
+```
+
+Deployment is done with **one command**:
 
 ```bash
-cd docker-compose
+ansible-playbook deploy.yml
 ```
 
 ---
 
-### Step 2: Build and run everything
+## ▶️ How the Application Runs
 
-```bash
-docker compose -f docker-compose-prod.yml up --build
-```
+* Each EC2 instance runs:
 
-Docker will:
+  * Nginx
+  * Frontend container
+  * Backend container
+* The Load Balancer distributes traffic across all instances
+* Each instance is identical (stateless)
 
-* Build the backend image
-* Build the frontend image
-* Start both services
-* Connect them automatically
+This enables:
 
----
-
-### Step 3: Open the application
-
-Open your browser:
-
-```
-http://localhost
-```
-
-You should see the frontend running.
-
----
-
-### Step 4: Test the backend (optional)
-
-Open:
-
-```
-http://localhost/api/status
-```
-
-This confirms:
-
-* Backend is running
-* Nginx is proxying correctly
+* Horizontal scaling
+* Fault tolerance
+* Production-style traffic flow
 
 ---
 
 ## 🔐 Security & Production Notes
 
-* Backend is **not exposed to the internet**
-* Only Nginx has a public port
-* Services communicate over an internal network
-* No development servers are used in production
+* Backend is not publicly exposed
+* Only Nginx listens on public ports
+* Services communicate over internal Docker networks
+* No development servers in production
+* No hard-coded credentials or environments
 
 ---
 
 ## 🧠 Why This Project Matters
 
-Many demos show only:
+Many demos stop at:
 
-> "It works on my machine"
+> “It works on my machine.”
 
 DeployBoard shows:
 
-* How applications are **actually deployed**
-* How environments are separated
-* How infrastructure decisions are made
+* How infrastructure is provisioned
+* How servers are configured automatically
+* How applications are deployed consistently
+* How systems scale behind a load balancer
 
-This reflects **real DevOps / Platform engineering work**.
+This reflects **real DevOps / Platform Engineering work**, not toy examples.
 
 ---
 
@@ -182,20 +263,25 @@ This reflects **real DevOps / Platform engineering work**.
 
 * HR reviewers
 * Technical recruiters
-* Junior-to-mid DevOps hiring managers
+* Junior to mid-level DevOps hiring managers
+* Engineers learning real deployment workflows
 
 No deep framework knowledge is required to understand this project.
 
 ---
 
-## ✅ Status
+## ✅ Project Status
 
 ✔ Working
-✔ Production-style
+✔ Automated
+✔ Scalable
+✔ Production-minded
 ✔ Clean architecture
 
 ---
 
-**Thank you for reviewing this project.**
+### Final Note
 
-This repository focuses on **deployment quality**, not application features.
+This repository focuses on **deployment quality and system design**, not application features.
+
+That is intentional.
